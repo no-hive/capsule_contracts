@@ -1,0 +1,2 @@
+openzeppelin-contracts=OpenZeppelin/openzeppelin-contracts@5fd1781b1454fd1ef8e722282f86f9293cacf256
+forge-std=foundry-rs/forge-std@f3dae6e6ee381f25eb6a246f7da9b85c91a68219
