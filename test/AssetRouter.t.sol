@@ -609,7 +609,9 @@ contract RouterGuardTest is RouterTestBase {
         ReentrantToken asset = new ReentrantToken();
         asset.mint(alice, 1_000);
         approveToken(asset, 1_000);
-        asset.configure(address(router), abi.encodeCall(router.disposeERC20, (address(asset), 1, false)));
+        asset.configure(
+            address(router), abi.encodeWithSignature("disposeERC20(address,uint256,bool)", address(asset), 1, false)
+        );
         (address[] memory recipients, uint256[] memory amounts) = batch();
         vm.prank(alice);
         router.distribute(address(asset), recipients, amounts);
@@ -619,7 +621,9 @@ contract RouterGuardTest is RouterTestBase {
 
     function testNFTReceiverCannotEnterAnotherRouterModule() public {
         ReentrantNFTReceiver receiver = new ReentrantNFTReceiver();
-        receiver.configure(address(router), abi.encodeCall(router.releaseDisposalLock, (0)));
+
+        receiver.configure(address(router), abi.encodeWithSignature("releaseDisposalLock(uint256)", 0));
+
         uint64 unlock = uint64(vm.getBlockTimestamp() + 100);
         vm.prank(alice);
         router.lock(address(nft), 1, address(receiver), unlock);

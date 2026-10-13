@@ -4,10 +4,11 @@ pragma solidity ^0.8.24;
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Rewardable} from "./Rewardable.sol";
 
 /// @notice Holds each NFT until its release timestamp.
 /// @dev Accepts only expected safe transfers. Plain transferFrom cannot be blocked.
-contract ERC721ScheduledLocker is IERC721Receiver, ReentrancyGuard {
+abstract contract ERC721ScheduledLocker is IERC721Receiver, Rewardable, ReentrancyGuard {
     struct Lock {
         address beneficiary;
         uint64 unlockAt;
@@ -25,7 +26,19 @@ contract ERC721ScheduledLocker is IERC721Receiver, ReentrancyGuard {
     );
     event Released(address indexed token, uint256 indexed tokenId, address indexed beneficiary, address destination);
 
+    /// @notice Backwards-compatible entrypoint that does not request an action reward.
     function lock(address token, uint256 tokenId, address beneficiary, uint64 unlockAt) external nonReentrant {
+        _lock(token, tokenId, beneficiary, unlockAt, false);
+    }
+
+    function lock(address token, uint256 tokenId, address beneficiary, uint64 unlockAt, bool wantsReward)
+        external
+        nonReentrant
+    {
+        _lock(token, tokenId, beneficiary, unlockAt, wantsReward);
+    }
+
+    function _lock(address token, uint256 tokenId, address beneficiary, uint64 unlockAt, bool wantsReward) private {
         if (
             token.code.length == 0 || !_validNFTBeneficiary(beneficiary) || unlockAt <= block.timestamp
                 || locks[token][tokenId].beneficiary != address(0) || IERC721(token).ownerOf(tokenId) != msg.sender
@@ -40,6 +53,7 @@ contract ERC721ScheduledLocker is IERC721Receiver, ReentrancyGuard {
         delete expectedFrom;
         delete expectedId;
         emit Locked(msg.sender, token, tokenId, beneficiary, unlockAt);
+        _rewardAction(msg.sender, wantsReward);
     }
 
     function _validNFTBeneficiary(address beneficiary) internal view virtual returns (bool) {
@@ -60,13 +74,29 @@ contract ERC721ScheduledLocker is IERC721Receiver, ReentrancyGuard {
     }
 
     /// @notice Anyone can release the NFT to its beneficiary after the deadline.
+    /// @notice Backwards-compatible entrypoint that does not request an action reward.
     function release(address token, uint256 tokenId) external nonReentrant {
-        _release(token, tokenId, locks[token][tokenId].beneficiary, false);
+        _releaseAndReward(token, tokenId, locks[token][tokenId].beneficiary, false, false);
     }
 
-    /// @notice Lets the beneficiary choose a destination after the deadline.
+    function release(address token, uint256 tokenId, bool wantsReward) external nonReentrant {
+        _releaseAndReward(token, tokenId, locks[token][tokenId].beneficiary, false, wantsReward);
+    }
+
+    /// @notice Backwards-compatible entrypoint that does not request an action reward.
     function releaseTo(address token, uint256 tokenId, address destination) external nonReentrant {
-        _release(token, tokenId, destination, true);
+        _releaseAndReward(token, tokenId, destination, true, false);
+    }
+
+    function releaseTo(address token, uint256 tokenId, address destination, bool wantsReward) external nonReentrant {
+        _releaseAndReward(token, tokenId, destination, true, wantsReward);
+    }
+
+    function _releaseAndReward(address token, uint256 tokenId, address destination, bool custom, bool wantsReward)
+        private
+    {
+        _release(token, tokenId, destination, custom);
+        _rewardAction(msg.sender, wantsReward);
     }
 
     function _release(address token, uint256 tokenId, address destination, bool custom) private {

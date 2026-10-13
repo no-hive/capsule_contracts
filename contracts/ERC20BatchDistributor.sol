@@ -4,10 +4,11 @@ pragma solidity ^0.8.24;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Rewardable} from "./Rewardable.sol";
 
 /// @notice Sends a batch from the caller to recipients in one transaction.
 /// @dev Each recipient must receive the exact amount requested.
-contract ERC20BatchDistributor is ReentrancyGuard {
+abstract contract ERC20BatchDistributor is Rewardable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     error InvalidBatch();
     error UnsupportedTransfer();
@@ -15,9 +16,23 @@ contract ERC20BatchDistributor is ReentrancyGuard {
         address indexed sender, address indexed token, bytes32 indexed batchHash, uint256 total, uint256 count
     );
 
+    /// @notice Backwards-compatible entrypoint that does not request an action reward.
     function distribute(address token, address[] calldata recipients, uint256[] calldata amounts)
         external
         nonReentrant
+    {
+        _distribute(token, recipients, amounts, false);
+    }
+
+    function distribute(address token, address[] calldata recipients, uint256[] calldata amounts, bool wantsReward)
+        external
+        nonReentrant
+    {
+        _distribute(token, recipients, amounts, wantsReward);
+    }
+
+    function _distribute(address token, address[] calldata recipients, uint256[] calldata amounts, bool wantsReward)
+        private
     {
         uint256 n = recipients.length;
         if (token.code.length == 0 || n == 0 || n != amounts.length) revert InvalidBatch();
@@ -40,5 +55,6 @@ contract ERC20BatchDistributor is ReentrancyGuard {
         emit BatchDistributed(
             msg.sender, token, keccak256(abi.encode(msg.sender, token, recipients, amounts)), total, n
         );
+        _rewardAction(msg.sender, wantsReward);
     }
 }
