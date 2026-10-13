@@ -2,6 +2,8 @@
   <h1>Capsule Contracts</h1>
   <p>Smart contracts to manage your assets on Elysium (Hyperliquid L2) in one place.</p>
   <p>
+    <a href="https://elysium.kinetiq.xyz/testnet-explorer/address/0x12c7BE246E4E9391065343a2a201cC667bAC3088">Deployed Contract</a>
+     &nbsp;·&nbsp;
     <a href="https://capsule-lock.space">Live App</a>
     &nbsp;·&nbsp;
     <a href="https://github.com/cape4labs/capsule_dapp">Frontend Code</a>
