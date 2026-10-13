@@ -633,3 +633,75 @@ contract RouterGuardTest is RouterTestBase {
         assertLe(address(router).code.length, 24_576);
     }
 }
+
+contract RewardsAndOwnershipTest is RouterTestBase {
+    function testDeployerIsOwnerAndOnlyOwnerCanSetRewardToken() public {
+        assertEq(router.owner(), address(this));
+
+        vm.prank(alice);
+        vm.expectRevert();
+        router.setRewardToken(address(token));
+
+        router.setRewardToken(address(token));
+        assertEq(address(router.rewardToken()), address(token));
+
+        vm.prank(alice);
+        vm.expectRevert();
+        router.transferOwnership(bob);
+
+        router.transferOwnership(alice);
+        assertEq(router.owner(), alice);
+        vm.prank(alice);
+        router.setRewardToken(address(token));
+    }
+
+    function testOwnerCannotSetZeroOrNonContractRewardToken() public {
+        vm.expectRevert(AssetRouter.InvalidRewardToken.selector);
+        router.setRewardToken(address(0));
+        vm.expectRevert(AssetRouter.InvalidRewardToken.selector);
+        router.setRewardToken(alice);
+    }
+
+    function testCreateVestingPaysRequestedRewardFromRouterBalance() public {
+        router.setRewardToken(address(token));
+        token.mint(address(router), 100 ether);
+        uint256 beforeAlice = token.balanceOf(alice);
+
+        vm.prank(alice);
+        router.createVesting(address(token), 1_000, bob, uint64(vm.getBlockTimestamp()), 0, 0, true);
+
+        assertEq(token.balanceOf(alice), beforeAlice - 1_000 + router.ACTION_REWARD());
+        assertEq(token.balanceOf(address(router)), 90 ether);
+    }
+
+    function testFalseRewardFlagSkipsRewardTransfer() public {
+        router.setRewardToken(address(token));
+        token.mint(address(router), 100 ether);
+        uint256 beforeAlice = token.balanceOf(alice);
+
+        vm.prank(alice);
+        router.createVesting(address(token), 1_000, bob, uint64(vm.getBlockTimestamp()), 0, 0, false);
+
+        assertEq(token.balanceOf(alice), beforeAlice - 1_000);
+        assertEq(token.balanceOf(address(router)), 100 ether);
+    }
+
+    function testRequestedRewardWithoutConfiguredTokenRevertsAction() public {
+        vm.prank(alice);
+        vm.expectRevert(AssetRouter.InvalidRewardToken.selector);
+        router.createVesting(address(token), 1_000, bob, uint64(vm.getBlockTimestamp()), 0, 0, true);
+        assertEq(token.balanceOf(alice), 10_000);
+    }
+
+    function testZeroValueVestingReleaseDoesNotPayReward() public {
+        router.setRewardToken(address(token));
+        token.mint(address(router), 100 ether);
+        FixedBeneficiaryVesting wallet = create(uint64(vm.getBlockTimestamp() + 100), 0, 0);
+
+        vm.prank(stranger);
+        router.releaseVesting(address(wallet), address(token), true);
+
+        assertEq(token.balanceOf(stranger), 0);
+        assertEq(token.balanceOf(address(router)), 100 ether);
+    }
+}
